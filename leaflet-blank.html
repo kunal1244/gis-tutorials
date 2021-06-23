@@ -9,16 +9,10 @@
   <!-- Leaflet -->
   <link rel="stylesheet" href="_leaflet/plugins/leaflet/leaflet.css" />
   <script src="_leaflet/plugins/leaflet/leaflet.js"></script>
-  <script src="https://api.mapbox.com/mapbox.js/plugins/leaflet-hash/v0.2.1/leaflet-hash.js"></script>
   <!-- Omnivore -->
   <script src="_leaflet/plugins/omnivore/leaflet-omnivore.min.js"></script>
-  <!-- Search -->
-  <link rel="stylesheet" href="_leaflet/plugins/search/leaflet-search.min.css" />
-  <script src="_leaflet/plugins/search/leaflet-search.min.js"></script>
   <!--Choropleth -->
   <script src="_leaflet/plugins/choropleth/choropleth.js"></script>
-  <!--Turf -->
-  <script src="_leaflet/plugins/turf/turf.min.js"></script>
   <style>
     body,
     html {
@@ -28,7 +22,7 @@
     }
 
     #map {
-      width: 100%;
+      width: 70%;
       height: 100%;
       background: whitesmoke;
     }
@@ -45,16 +39,121 @@
 </head>
 
 <body>
+  <div id = "info" style = "float: right; margin-right: 200px; margin-top: 200px;"></div>
   <div id="map">
     <div id="coord"></div>
   </div>
   <script>
-    var map = new L.map('map');
-    map.setView([39, -82], 10);
-    var coord = document.getElementById("coord");
-    map.on('mousemove', function(e) {
-      coord.innerHTML = e.latlng.lat + ', ' + e.latlng.lng;
+
+    var map = L.map("map");
+
+map.setView([40.3,-96.6], 5);
+
+// L.hash(map);
+
+L.control.scale().addTo(map);
+
+var layerControl = new L.control.layers(null, null).addTo(map);
+
+/*Easily add basemaps or baselayers with L.tileLayer wms layers can also be added with L.tileLayer.wms */
+
+var OpenStreetMap_HOT = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, Tiles courtesy of <a href="http://hot.openstreetmap.org/" target="_blank">Humanitarian OpenStreetMap Team</a>'
+}).addTo(map);
+
+layerControl.addBaseLayer(OpenStreetMap_HOT, "Streets");
+
+var url = "https://raw.githubusercontent.com/ovrdc/gis-tutorials/master/tutorial-data/counties.topojson";
+
+var counties = L.geoJson(null, {
+  filter: function(feature) {
+    if (feature.properties.state == 39) {
+      return true
+    }
+  },
+  style: function(feature) {
+    switch (feature.properties.winner) {
+      case "Trump":
+        return {
+          fillColor: "red",
+          color: 'white',
+          fillOpacity: 0.7
+        }
+      default:
+        return {
+          fillColor: "blue",
+          color: 'white',
+          fillOpacity: 0.7
+        }
+    }
+  },
+  onEachFeature: function(feature, county) {
+    var info = county.feature.properties.NAME;
+    county.bindPopup(info);
+  }
+}).addTo(map);
+
+/*can put html inside here, this is one way you could add a legend*/
+layerControl.addOverlay(counties, "Counties");
+
+var cData = omnivore.topojson(url, null, counties);
+
+cData.on('ready', function() {
+  map.fitBounds(counties.getBounds())
+});
+
+// Choropleth
+
+cData.on("ready", function() {
+  map.removeLayer(counties);
+  choropleth = L.choropleth(cData.toGeoJSON(), {
+    filter: function(feature) {
+      if (feature.properties.state == 39) {
+        return true
+      }
+    },
+    valueProperty: "POP_SQMI", // which property in the features to use
+    scale: ["white", "#006d2c"], // chroma.js scale - include as many as you like
+    steps: 7, // number of breaks or steps in range
+    mode: "q", // q for quantile, e for equidistant, k for k-means
+    style: {
+      color: "#fff", // border color
+      weight: 1,
+      fillOpacity: 0.8
+    },
+    onEachFeature: function(feature, layer) {
+      layer.bindTooltip(feature.properties.NAME + '<' + 'br' + '>' + feature.properties.POPULATION);
+      layer.on('click', function (e) {
+        var detail = feature.properties;
+        document.getElementById("info").innerHTML = detail.NAME + '<' + 'br' + '>' + detail.winner + '<' + 'br' + '>' + detail.POP_SQMI + '<' + 'br' + '>' + detail.state + '<' + 'br' + '>' + detail.per_gop + '<' + 'br' + '>' + detail.per_dem;
     });
+    }
+  }).addTo(map);
+
+  layerControl.addOverlay(choropleth, "Choropleth");
+
+  /*Legend Custom Leaflet Control*/
+  var legend = L.control({ position: 'bottomright' });
+  legend.onAdd = function (map) {
+    var div = L.DomUtil.create('div', 'info legend')
+    var colors = choropleth.options.colors
+    var labels = []
+
+    /* Add min & max*/
+    div.innerHTML = '<div><h3 style="font-weight:bolder;font-size:larger;">Population Density</h3><br></div><div class="labels"><div class="min">Low</div> \
+  <div class="max">High</div></div>'
+
+  for (i = 1; i < colors.length; i++) {
+      labels.push('<li style="background-color: ' + colors[i] + '"></li>')
+    }
+
+    div.innerHTML += '<ul style="list-style-type:none;display:flex">' + labels.join('') + '</ul>'
+    return div
+  }
+
+  // legend.addTo(map);
+});
   </script>
 </body>
 
